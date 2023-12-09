@@ -1,0 +1,133 @@
+---
+
+- name: Install EPEL repository
+  yum:
+    name: epel-release
+    state: present
+
+- name: Install Nagios Libraries
+  package:
+    name:
+      - gcc
+      - glibc
+      - glibc-common
+      - perl
+      - httpd
+      - php
+      - wget
+      - gd
+      - gd-devel
+      - openssl-devel
+      - make
+      - gettext
+      - automake
+      - net-snmp
+      - net-snmp-utils
+      - python-pip
+  when: ansible_distribution_major_version == '7'
+
+- name: Install Development Tools and Libraries
+  package:
+    name:
+      - automake
+      - autoconf
+      - gcc-c++
+      - openssl-devel
+      - libtool
+  when: ansible_distribution_major_version == '7'
+
+- name: Add nagios user
+  user:
+    name: nagios
+    state: present
+
+- name: Add nagcmd group
+  group:
+    name: nagcmd
+    state: present
+
+- name: Add nagios to nagcmd group
+  user:
+    name: nagios
+    groups: nagcmd
+    append: yes
+
+- name: Add apache to nagcmd group
+  user:
+    name: apache
+    groups: nagcmd
+    append: yes
+
+- name: Create Nagios directory PATH
+  file:
+    path: ~/nagios
+    state: directory
+
+- name: Download Nagios
+  unarchive:
+    src: https://github.com/NagiosEnterprises/nagioscore/archive/nagios-4.4.6.tar.gz
+    dest: ~/nagios
+    remote_src: yes
+    mode: 0777
+    owner: root
+    group: root
+
+- name: Download Nagios plugins
+  unarchive:
+    src: https://github.com/nagios-plugins/nagios-plugins/archive/release-2.3.3.tar.gz
+    dest: ~/nagios
+    remote_src: yes
+    mode: 0777
+    owner: root
+    group: root
+
+- name: Compile and Install Nagios and Web Configuration
+  shell: |
+    cd ~/nagios/nagioscore-**
+    ./configure
+    make all
+    make install
+    make install-init
+    make install-commandmode
+    make install-config
+    make install-webconf
+
+- name: Compile and Install Nagios plugins
+  shell: |
+    cd ~/nagios/nagios-plugins*
+    ./tools/setup
+    ./configure
+    make
+    make install
+
+- name: Adding Users to Nagios
+  community.general.htpasswd:
+    path: /usr/local/nagios/etc/htpasswd.users
+    name: admin
+    password: admin
+
+- name: Start Apache
+  service:
+    name: httpd
+    state: started
+    enabled: yes
+
+- name: Change directory to Nagios installation directory
+  command: cd ~/nagios
+
+- name: Verify Nagios Configuration
+  command: >
+    /usr/local/nagios/bin/nagios -v /usr/local/nagios/etc/nagios.cfg
+  changed_when: false
+
+- name: Start and enable Nagios
+  service:
+    name: nagios
+    state: restarted
+    enabled: true
+
+- name: Start and enable HTTPD
+  service:
+    name: httpd
+    state: restarted
+    enabled: true
